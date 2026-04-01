@@ -1,33 +1,125 @@
-<<<<<<< HEAD
 # Trend Forecasting Agent Network
 
-Production-grade trend intelligence platform that detects emerging technology trends 3–5 days before mainstream coverage by analyzing Reddit, Hacker News, and arXiv.
+A trend intelligence app that turns noisy internet chatter into a **ranked feed of early signals**.
 
-## Stack
+It ingests posts from multiple platforms, clusters them into topics, scores “how hot” they are, and produces short, sourced summaries.
 
-- **Backend:** FastAPI, PostgreSQL, pgvector, LangGraph
-- **Agents:** Data Ingestion, Embedding/Clustering (BERTopic/HDBSCAN), Momentum Scoring, Cross-Source Validation, Synthesis (LLM)
-- **Frontend:** React + TailwindCSS + Recharts
-- **Scheduler:** APScheduler for daily pipeline
+## What you get
 
-## Quick start
+- **Signals feed**: “what’s emerging right now” with score + sources + simple explainability (“Explain like I’m 5”)
+- **Dashboard**: trending topics + momentum chart
+- **Topic deep-dive**: raw discussions/research links + insight summary
+- **Weekly reports**: auto-generated markdown report
+- **Alerts**: create webhook rules (Slack/Discord/custom) with recent event log
 
-1. Copy `.env.example` to `.env` and set `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `OPENAI_API_KEY` as needed.
-2. Start services: `docker-compose up -d postgres` then run backend locally, or `docker-compose up -d` for full stack.
-3. Run migrations: `cd backend && alembic upgrade head`.
-4. Start backend: `uvicorn app.main:app --reload`.
-5. Start frontend: `cd frontend && npm install && npm run dev`.
+## Data sources (10)
 
-## Project structure
+- Reddit (optional credentials)
+- Hacker News
+- arXiv
+- GitHub (optional token)
+- Product Hunt (token required)
+- Tech RSS (multiple outlets)
+- Stack Overflow
+- Dev.to
+- Lobste.rs
+- Google Trends
 
-- `backend/` — FastAPI app, agents, DB, API
-- `frontend/` — Dashboard, Signal Feed, Reports
-- `docs/` — Architecture, schema, API, example report
+## How it works (simple)
 
-## License
+1. **Ingest**: fetch new items and store as `raw_posts`
+2. **Embed + cluster**: convert text → vectors and group into topics
+3. **Score**: compute momentum + novelty signals (0–1)
+4. **Cross-source**: how many different places talk about it
+5. **Categorize**: assign one of 10 human categories
+6. **Synthesize**: Gemini generates a short “what/why/impact”
 
-MIT
-=======
-# trend-forecasting-agent-network
-Trend Forecasting Agent Network is a full‑stack trend intelligence platform that ingests Reddit, Hacker News, and arXiv daily, clusters discussions into semantic topics, scores momentum and cross‑source validation, and generates concise LLM (Gemini) insights in a live dashboard and weekly reports.
->>>>>>> ac199a7048461f79d6b31e92006cda3ea83df413
+## Tech stack
+
+- **Backend**: FastAPI, SQLAlchemy, Alembic, PostgreSQL, pgvector
+- **Pipeline**: LangGraph agents + APScheduler
+- **Embeddings/Topics**: sentence-transformers + BERTopic/HDBSCAN
+- **LLM**: Google Gemini (`GOOGLE_API_KEY`, `GEMINI_MODEL`)
+- **Frontend**: React + Vite + Tailwind + React Query + Recharts
+
+## Quickstart (local)
+
+### 1) Configure environment
+
+Copy example env:
+
+```bash
+cp .env.example .env
+```
+
+Fill at minimum:
+- `DATABASE_URL`, `DATABASE_URL_SYNC`
+- `GOOGLE_API_KEY`, `GEMINI_MODEL`
+
+Optional:
+- `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` (if you can create a Reddit app)
+- `GITHUB_TOKEN` (higher rate limits)
+- `PRODUCTHUNT_API_TOKEN` (required to ingest Product Hunt)
+
+### 2) Backend
+
+From `backend/`:
+
+```bash
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --host 0.0.0.0 --port 8004 --reload
+```
+
+### 3) Frontend
+
+From `frontend/`:
+
+```bash
+npm install
+npm run dev
+```
+
+Vite proxies `/api/*` to the backend. If your backend runs on a different port, update `frontend/vite.config.ts`.
+
+### 4) Run the pipeline
+
+- In the UI: click **Run pipeline now**
+- Or call:
+
+```bash
+curl -X POST http://127.0.0.1:8004/api/v1/admin/ingest
+```
+
+## Useful endpoints
+
+- `GET /health`
+- `GET /api/v1/signals`
+- `GET /api/v1/topics`
+- `GET /api/v1/explain/topic/{topic_id}`
+- `GET /api/v1/runs/latest`
+- `GET /api/v1/search?q=...`
+- `GET /api/v1/exports/signals.csv`
+
+## Alerts (webhooks)
+
+Create a rule in the UI (Alerts tab). The backend evaluates rules every ~10 minutes and sends JSON to your webhook URL.
+
+## Databricks (optional, background)
+
+If you want the backend to trigger a Databricks Job every 24h:
+
+```env
+USE_DATABRICKS_JOBS=true
+DATABRICKS_HOST=https://<workspace>.cloud.databricks.com
+DATABRICKS_TOKEN=<PAT>
+DATABRICKS_PIPELINE_JOB_ID=<job_id>
+```
+
+Restart the backend after changing env vars.
+
+## Security notes
+
+- `.env` is ignored by `.gitignore`. **Never commit it.**
+- If you ever accidentally committed tokens, rotate them immediately (Google/GitHub/ProductHunt).
+
