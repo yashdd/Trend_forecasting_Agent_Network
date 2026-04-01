@@ -1,0 +1,43 @@
+# FastAPI & server
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# Database
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+psycopg2-binary==2.9.10
+
+# pgvector
+pgvector==0.3.6
+
+# Data sources
+praw>=7.7.0
+httpx==0.28.1
+arxiv-client==0.3.2
+feedparser>=6.0.0
+pytrends>=4.9.0
+
+# Embeddings & clustering
+sentence-transformers==3.3.1
+bertopic==0.16.0
+hdbscan==0.8.40
+umap-learn==0.5.6
+
+# LangGraph & LLM
+langgraph>=0.2.60
+langchain-core>=0.3.29,<0.4.0
+langchain-google-genai>=2.0.4
+langchain-community>=0.3.14
+
+# Scheduler
+apscheduler==3.10.4
+
+# Config & utils
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# Optional: Redis for Celery (if needed later)
+# redis==5.2.1
+# celery==5.4.0
