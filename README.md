@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Trend Forecasting Agent Network
 
 Production-grade trend intelligence platform that detects emerging technology trends 3–5 days before mainstream coverage by analyzing Reddit, Hacker News, and arXiv.
@@ -26,3 +27,7 @@ Production-grade trend intelligence platform that detects emerging technology tr
 ## License
 
 MIT
+=======
+# trend-forecasting-agent-network
+Trend Forecasting Agent Network is a full‑stack trend intelligence platform that ingests Reddit, Hacker News, and arXiv daily, clusters discussions into semantic topics, scores momentum and cross‑source validation, and generates concise LLM (Gemini) insights in a live dashboard and weekly reports.
+>>>>>>> ac199a7048461f79d6b31e92006cda3ea83df413
