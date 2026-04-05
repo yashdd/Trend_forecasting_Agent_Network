@@ -12,7 +12,7 @@ import {
 import { fetchTopics, fetchTopic, fetchMomentum } from "../api/client";
 import { useState } from "react";
 import { Badge, Card, CardBody, CardHeader, SegmentedTabs, Spinner } from "../components/ui";
-import { humanizeToken } from "../utils/format";
+import { humanizeTopicLabel, humanizeToken } from "../utils/format";
 
 const CATEGORY_OPTIONS = [
   { value: "all", label: "All" },
@@ -76,7 +76,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardBody>
             {topics && topics.length === 0 ? (
-              <p className="text-white/60 text-sm">No topics yet. Run the pipeline to generate clusters.</p>
+              <p className="text-white/60 text-sm">No topics yet. Go to Signals and click “Update signals”.</p>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {topics?.map((t) => (
@@ -91,7 +91,7 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="font-medium text-white truncate">
-                      {humanizeToken(t.label) || `Topic ${t.id}`}
+                      {humanizeTopicLabel(t.label) || `Topic ${t.id}`}
                     </div>
                     {t.category ? <Badge>{humanizeToken(t.category)}</Badge> : null}
                   </div>

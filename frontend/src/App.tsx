@@ -5,12 +5,14 @@ import TopicDeepDive from "./pages/TopicDeepDive";
 import WeeklyReport from "./pages/WeeklyReport";
 import AlertsPage from "./pages/Alerts";
 import Navbar from "./components/Navbar";
+import TrendNotificationBar from "./components/TrendNotificationBar";
 
 function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen">
         <Navbar />
+        <TrendNotificationBar />
 
         <main className="max-w-7xl w-full mx-auto px-4 py-8">
           <Routes>

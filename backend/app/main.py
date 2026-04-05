@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from app.config import get_settings
 from app.api import signals, topics, metrics, reports, admin, health, explain, alerts, runs, search, exports
 from app.jobs.pipeline_job import run_daily_pipeline
-from app.jobs.weekly_report_job import run_weekly_report
+from app.jobs.report_job import run_daily_scheduled_report
 from app.services.databricks_client import trigger_databricks_pipeline_job
 from app.jobs.alerts_job import run_alerts_evaluator
 
@@ -19,7 +19,7 @@ _scheduler: BackgroundScheduler | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: scheduler for daily pipeline/weekly report. Shutdown: stop scheduler."""
+    """Startup: scheduler for daily pipeline, daily trend report, alerts. Shutdown: stop scheduler."""
     global _scheduler
     settings = get_settings()
     # Log which DB we're using (host:port only) so you can confirm e.g. 5433
@@ -59,12 +59,20 @@ async def lifespan(app: FastAPI):
             max_instances=1,
             coalesce=True,
         )
-    _scheduler.add_job(run_weekly_report, "cron", day_of_week="sun", hour=3, minute=0, id="weekly_report")
     _scheduler.add_job(
-        run_weekly_report,
+        run_daily_scheduled_report,
+        "cron",
+        hour=3,
+        minute=0,
+        id="daily_report",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        run_daily_scheduled_report,
         "date",
         run_date=startup_run_at + timedelta(seconds=20),
-        id="startup_weekly_report",
+        id="startup_daily_report",
         max_instances=1,
         coalesce=True,
     )

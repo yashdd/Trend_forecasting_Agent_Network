@@ -133,6 +133,39 @@ class TrendInsight(Base):
     topic = relationship("Topic", backref="trend_insights")
 
 
+class TrendComment(Base):
+    __tablename__ = "trend_comments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trend_insight_id = Column(Integer, ForeignKey("trend_insights.id", ondelete="CASCADE"), nullable=False)
+    body = Column(Text, nullable=False)
+
+    # Stable anonymous identity derived from IP (never store raw IP).
+    author_fingerprint = Column(String(64), nullable=False)
+    author_label = Column(String(32), nullable=False)
+
+    # Moderation
+    hidden = Column(Integer, nullable=False, default=0)  # 1/0
+    hidden_reason = Column(String(128), nullable=True)
+    hidden_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+    trend_insight = relationship("TrendInsight", backref="comments")
+
+
+class ReportSettings(Base):
+    """Singleton row id=1: defaults for the daily scheduled report."""
+
+    __tablename__ = "report_settings"
+
+    id = Column(Integer, primary_key=True)  # always 1
+    lookback_days = Column(Integer, nullable=False, default=1)
+    max_topics = Column(Integer, nullable=False, default=10)
+    categories = Column(JSON, nullable=True)  # null = all categories
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class WeeklyReport(Base):
     __tablename__ = "weekly_reports"
 
@@ -142,6 +175,8 @@ class WeeklyReport(Base):
     top_signals = Column(JSON, nullable=True)  # list of trend_insight ids or summary objects
     report_markdown = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
+    preferences = Column(JSON, nullable=True)  # snapshot: lookback, categories, max_topics
+    source = Column(String(16), nullable=False, default="scheduled")  # scheduled | manual
 
 
 class PipelineRun(Base):
@@ -164,11 +199,13 @@ class AlertRule(Base):
 
     # Filters (all optional; ANDed)
     category = Column(String(64), nullable=True)
+    # Substrings (case-insensitive); all must appear in topic label + latest insight text
+    keywords = Column(JSON, nullable=True)
     min_signal_score = Column(Float, nullable=True)
     min_cross_source_strength = Column(Float, nullable=True)
 
-    # Where to send
-    webhook_url = Column(Text, nullable=False)
+    # Optional: POST JSON here; if null, notifications are in-app only (AlertEvent rows).
+    webhook_url = Column(Text, nullable=True)
 
     # Rate limiting / de-dupe
     max_events_per_day = Column(Integer, nullable=False, default=20)
@@ -179,7 +216,7 @@ class AlertEvent(Base):
     __tablename__ = "alert_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    rule_id = Column(Integer, ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False)
+    rule_id = Column(Integer, ForeignKey("alert_rules.id", ondelete="SET NULL"), nullable=True)
     topic_id = Column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False)
     trend_insight_id = Column(Integer, ForeignKey("trend_insights.id", ondelete="CASCADE"), nullable=True)
 

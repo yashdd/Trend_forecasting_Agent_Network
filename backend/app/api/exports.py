@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.orm import TrendInsight, Topic
+from app.utils.insight_text import strip_internal_citations
 
 router = APIRouter(prefix="/exports")
 
@@ -28,7 +29,8 @@ async def export_signals_csv(limit: int = Query(200, ge=1, le=2000), db: AsyncSe
     w = csv.writer(buf)
     w.writerow(["trend_insight_id", "topic_id", "topic_label", "category", "generated_at", "summary"])
     for insight, topic in rows:
-        w.writerow([insight.id, topic.id, topic.label, topic.category, insight.generated_at, (insight.summary or "")[:2000]])
+        clean = strip_internal_citations(insight.summary)[:2000]
+        w.writerow([insight.id, topic.id, topic.label, topic.category, insight.generated_at, clean])
     buf.seek(0)
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv")
 

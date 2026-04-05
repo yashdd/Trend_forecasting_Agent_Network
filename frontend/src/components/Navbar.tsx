@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import AlertBell from "./AlertBell";
 import PipelineStatus from "./PipelineStatus";
 import { cx } from "./ui";
 
@@ -40,8 +41,9 @@ export default function Navbar() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <PipelineStatus className="hidden md:flex" />
+          <AlertBell />
           <nav className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
             {nav.map((item) => (
               <NavLink

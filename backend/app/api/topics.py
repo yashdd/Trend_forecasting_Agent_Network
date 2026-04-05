@@ -109,6 +109,7 @@ async def get_topic(
     trend_insight = None
     if insight:
         trend_insight = {
+            "id": insight.id,
             "summary": insight.summary,
             "why_it_matters": insight.why_it_matters,
             "industry_impact": insight.industry_impact,

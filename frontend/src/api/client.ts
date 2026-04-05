@@ -2,7 +2,15 @@ const BASE = "/api/v1";
 
 export const LAST_PIPELINE_TRIGGERED_AT_KEY = "trend_analyzer:last_pipeline_triggered_at";
 
+/** Max signal (trend_insight) id the user has treated as seen — for in-app “new trends” banner. */
+export const LAST_SEEN_SIGNAL_ID_KEY = "trend_analyzer:last_seen_signal_id";
+
 export type SourceRef = { name: string; url: string | null; title: string | null };
+
+export type SignalsMeta = {
+  newest_insight_id: number;
+  newer_count: number;
+};
 
 export type SignalFeedItem = {
   id: number;
@@ -39,11 +47,27 @@ export type TopicDetail = {
   updated_at: string | null;
   daily_metrics: { date: string; mention_count: number; signal_score: number | null; growth_rate: number | null }[];
   trend_insight: {
+    id?: number;
     summary: string | null;
     why_it_matters: string | null;
     industry_impact: string | null;
     representative_sources: unknown;
   } | null;
+};
+
+export type TrendCommentOut = {
+  id: number;
+  trend_insight_id: number;
+  body: string;
+  author_label: string;
+  created_at: string;
+};
+
+export type TrendCommentsResponse = {
+  viewer_label: string;
+  has_more: boolean;
+  next_before_id: number | null;
+  comments: TrendCommentOut[];
 };
 
 export type MomentumPoint = {
@@ -68,6 +92,8 @@ export type WeeklyReportListItem = {
   period_start: string;
   period_end: string;
   created_at: string;
+  source?: string;
+  preferences?: Record<string, unknown> | null;
 };
 
 export type WeeklyReportDetail = {
@@ -77,7 +103,25 @@ export type WeeklyReportDetail = {
   top_signals: unknown[];
   report_markdown: string | null;
   created_at: string;
+  source?: string;
+  preferences?: Record<string, unknown> | null;
 };
+
+export type ReportSettingsOut = {
+  lookback_days: number;
+  max_topics: number;
+  categories: string[] | null;
+  updated_at: string;
+};
+
+/** Lightweight — use for polling instead of fetchSignals(limit: 80). */
+export async function fetchSignalsMeta(afterId?: number | null): Promise<SignalsMeta> {
+  const sp = new URLSearchParams();
+  if (afterId != null && afterId > 0) sp.set("after_id", String(afterId));
+  const r = await fetch(`${BASE}/signals/meta?${sp}`);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
 
 export async function fetchSignals(params?: {
   limit?: number;
@@ -129,6 +173,40 @@ export async function fetchTopicDiscussions(topicId: number, limit = 50): Promis
   return r.json();
 }
 
+export async function fetchSignalComments(
+  signalId: number,
+  params?: { limit?: number; before_id?: number | null }
+): Promise<TrendCommentsResponse> {
+  const sp = new URLSearchParams();
+  if (params?.limit) sp.set("limit", String(params.limit));
+  if (params?.before_id) sp.set("before_id", String(params.before_id));
+  const r = await fetch(`${BASE}/signals/${signalId}/comments?${sp}`);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+export async function postSignalComment(signalId: number, body: { body: string }): Promise<TrendCommentOut> {
+  const r = await fetch(`${BASE}/signals/${signalId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    let msg = r.statusText || `HTTP ${r.status}`;
+    try {
+      const err = (await r.json()) as { detail?: unknown };
+      const d = err.detail;
+      if (typeof d === "string") msg = d;
+      else if (Array.isArray(d) && d[0] && typeof (d[0] as { msg?: string }).msg === "string")
+        msg = (d[0] as { msg: string }).msg;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
 export async function fetchMomentum(
   topicId: number,
   fromDate?: string,
@@ -158,7 +236,7 @@ export async function triggerPipeline(): Promise<{ status: string; message: stri
 
 export async function pingApi(): Promise<boolean> {
   try {
-    const r = await fetch(`${BASE}/signals?limit=1`, { method: "GET" });
+    const r = await fetch(`${BASE}/signals/meta`, { method: "GET" });
     return r.ok;
   } catch {
     return false;
@@ -200,9 +278,12 @@ export type AlertRuleIn = {
   name: string;
   enabled?: boolean;
   category?: string | null;
+  /** All terms must appear in topic title or insight text (case-insensitive). */
+  keywords?: string[] | null;
   min_signal_score?: number | null;
   min_cross_source_strength?: number | null;
-  webhook_url: string;
+  /** Omit or leave empty for in-app notifications only */
+  webhook_url?: string | null;
   max_events_per_day?: number;
 };
 
@@ -211,21 +292,26 @@ export type AlertRuleOut = {
   name: string;
   enabled: boolean;
   category?: string | null;
+  keywords?: string[] | null;
   min_signal_score?: number | null;
   min_cross_source_strength?: number | null;
-  webhook_url: string;
+  webhook_url: string | null;
   max_events_per_day: number;
   created_at: string;
 };
 
+export const LAST_SEEN_ALERT_EVENT_ID_KEY = "tfa_last_seen_alert_event_id";
+
 export type AlertEventOut = {
   id: number;
-  rule_id: number;
+  rule_id: number | null;
   topic_id: number;
   trend_insight_id: number | null;
   sent_at: string;
   status: string;
   error_message: string | null;
+  rule_name?: string | null;
+  topic_label?: string | null;
 };
 
 export async function fetchAlertRules(): Promise<AlertRuleOut[]> {
@@ -242,6 +328,21 @@ export async function createAlertRule(body: AlertRuleIn): Promise<AlertRuleOut> 
   });
   if (!r.ok) throw new Error(r.statusText);
   return r.json();
+}
+
+export async function updateAlertRule(id: number, body: Partial<AlertRuleIn>): Promise<AlertRuleOut> {
+  const r = await fetch(`${BASE}/alerts/rules/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+export async function deleteAlertRule(id: number): Promise<void> {
+  const r = await fetch(`${BASE}/alerts/rules/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(r.statusText);
 }
 
 export async function fetchAlertEvents(limit = 50): Promise<AlertEventOut[]> {
@@ -271,5 +372,49 @@ export async function fetchWeeklyReports(): Promise<WeeklyReportListItem[]> {
 export async function fetchWeeklyReport(id: number): Promise<WeeklyReportDetail> {
   const r = await fetch(`${BASE}/reports/weekly/${id}`);
   if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+export async function fetchReportSettings(): Promise<ReportSettingsOut> {
+  const r = await fetch(`${BASE}/reports/settings`);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+export async function putReportSettings(body: {
+  lookback_days: number;
+  max_topics: number;
+  categories: string[] | null;
+}): Promise<ReportSettingsOut> {
+  const r = await fetch(`${BASE}/reports/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+export async function generateReportNow(body: {
+  period_start: string;
+  period_end: string;
+  categories?: string[] | null;
+  max_topics?: number;
+}): Promise<{ id: number }> {
+  const r = await fetch(`${BASE}/reports/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    let msg = r.statusText;
+    try {
+      const j = (await r.json()) as { detail?: string | unknown };
+      if (typeof j.detail === "string") msg = j.detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
   return r.json();
 }

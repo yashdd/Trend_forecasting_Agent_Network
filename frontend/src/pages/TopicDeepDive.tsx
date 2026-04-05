@@ -11,7 +11,8 @@ import {
 } from "recharts";
 import { fetchTopic, fetchTopicDiscussions, fetchMomentum } from "../api/client";
 import { Badge, Card, CardBody, CardHeader, Spinner } from "../components/ui";
-import { humanizeToken } from "../utils/format";
+import { displayInsightText, humanizeToken, humanizeTopicLabel, isUnhelpfulInsightText } from "../utils/format";
+import CommentsPanel from "../components/CommentsPanel";
 
 export default function TopicDeepDive() {
   const { topicId } = useParams<{ topicId: string }>();
@@ -80,11 +81,11 @@ export default function TopicDeepDive() {
           Dashboard
         </Link>
         <span className="mx-2">→</span>
-        <span className="text-white/85">{humanizeToken(topic.label) || `Topic ${topic.id}`}</span>
+        <span className="text-white/85">{humanizeTopicLabel(topic.label) || `Topic ${topic.id}`}</span>
       </nav>
 
       <h2 className="font-display text-2xl font-semibold text-white mb-6">
-        {humanizeToken(topic.label) || `Topic ${topic.id}`}
+        {humanizeTopicLabel(topic.label) || `Topic ${topic.id}`}
       </h2>
       {topic.category ? (
         <div className="mb-4">
@@ -97,28 +98,39 @@ export default function TopicDeepDive() {
           <CardHeader className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-white">Trend insight</p>
-              <p className="text-xs text-white/55 mt-1">LLM-generated synthesis (updates after pipeline runs).</p>
+              <p className="text-xs text-white/55 mt-1">Short AI summary (updates after you “Update signals”).</p>
             </div>
           </CardHeader>
           <CardBody className="space-y-4">
-          {insight.summary && (
+          {insight.summary && !isUnhelpfulInsightText(insight.summary) && (
             <div>
               <h3 className="text-white/65 font-medium text-sm mb-1">What it is</h3>
-              <p className="text-white/85">{insight.summary}</p>
+              <p className="text-white/85">{displayInsightText(insight.summary)}</p>
             </div>
           )}
-          {insight.why_it_matters && (
+          {insight.why_it_matters && !isUnhelpfulInsightText(insight.why_it_matters) && (
             <div>
               <h3 className="text-white/65 font-medium text-sm mb-1">Why it matters</h3>
-              <p className="text-white/85">{insight.why_it_matters}</p>
+              <p className="text-white/85">{displayInsightText(insight.why_it_matters)}</p>
             </div>
           )}
-          {insight.industry_impact && (
+          {insight.industry_impact && !isUnhelpfulInsightText(insight.industry_impact) && (
             <div>
               <h3 className="text-white/65 font-medium text-sm mb-1">Potential impact</h3>
-              <p className="text-white/85">{insight.industry_impact}</p>
+              <p className="text-white/85">{displayInsightText(insight.industry_impact)}</p>
             </div>
           )}
+          {insight &&
+            [insight.summary, insight.why_it_matters, insight.industry_impact].every(
+              (x) => !x?.trim() || isUnhelpfulInsightText(x)
+            ) && (
+              <p className="text-white/60 text-sm">
+                No AI write-up for this topic yet — see related discussions below, or run <strong className="text-white/80">Update signals</strong> after more posts are ingested.
+              </p>
+            )}
+          {"id" in insight && typeof (insight as any).id === "number" ? (
+            <CommentsPanel signalId={(insight as any).id} />
+          ) : null}
           </CardBody>
         </Card>
       )}

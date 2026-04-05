@@ -36,12 +36,19 @@ class Settings(BaseSettings):
     google_api_key: str
     gemini_model: str
 
+    # Anonymous comments
+    # Used to derive stable anonymous IDs from IP. Set this in .env for production.
+    comment_id_salt: str = ""
+
     # Embedding model
     embedding_model_name: str = "all-MiniLM-L6-v2"
 
     # Pipeline
     pipeline_top_k_synthesis: int = 10
     pipeline_batch_size_embed: int = 64
+    # Synthesis (Gemini): retries, validation, temperature
+    synthesis_max_retries: int = 3
+    synthesis_temperature: float = 0.2
 
     # Optional Databricks scheduler mode (backend triggers remote Databricks job every 24h)
     use_databricks_jobs: bool = False

@@ -49,7 +49,11 @@ export function Button(
 }
 
 export function Badge(
-  props: React.PropsWithChildren<{ tone?: "emerald" | "sky" | "amber" | "slate"; className?: string }>
+  props: React.PropsWithChildren<{
+    tone?: "emerald" | "sky" | "amber" | "slate";
+    className?: string;
+    title?: string;
+  }>
 ) {
   const tone = props.tone ?? "slate";
   const tones: Record<string, string> = {
@@ -60,6 +64,7 @@ export function Badge(
   };
   return (
     <span
+      title={props.title}
       className={cx(
         "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
         tones[tone],

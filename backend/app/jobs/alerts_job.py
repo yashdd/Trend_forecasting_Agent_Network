@@ -11,6 +11,29 @@ from app.db.session import get_sync_session
 from app.models.orm import AlertRule, AlertEvent, TopicDailyMetric, CrossSourceValidation, Topic, TrendInsight
 
 
+def _keywords_match(rule: AlertRule, t: Topic, insight: TrendInsight | None) -> bool:
+    """All keyword terms must appear (case-insensitive) in label + latest insight text."""
+    kw = rule.keywords
+    if not kw:
+        return True
+    if not isinstance(kw, list):
+        return True
+    terms = [str(x).strip().lower() for x in kw if str(x).strip()]
+    if not terms:
+        return True
+    parts = [t.label or ""]
+    if insight:
+        parts.extend(
+            [
+                insight.summary or "",
+                insight.why_it_matters or "",
+                insight.industry_impact or "",
+            ]
+        )
+    hay = " ".join(parts).lower()
+    return all(term in hay for term in terms)
+
+
 def _send_webhook(url: str, payload: dict) -> tuple[bool, str | None]:
     try:
         with httpx.Client(timeout=15.0) as client:
@@ -78,6 +101,13 @@ def run_alerts_evaluator() -> dict:
                 if rule.min_cross_source_strength is not None and cross_strength < rule.min_cross_source_strength:
                     continue
 
+                insight = session.execute(
+                    select(TrendInsight).where(TrendInsight.topic_id == topic_id).order_by(desc(TrendInsight.generated_at)).limit(1)
+                ).scalars().first()
+
+                if not _keywords_match(rule, t, insight):
+                    continue
+
                 # de-dupe per (rule, topic) in last 24h
                 already = session.execute(
                     select(AlertEvent.id).where(
@@ -88,10 +118,6 @@ def run_alerts_evaluator() -> dict:
                 ).scalars().first()
                 if already:
                     continue
-
-                insight = session.execute(
-                    select(TrendInsight).where(TrendInsight.topic_id == topic_id).order_by(desc(TrendInsight.generated_at)).limit(1)
-                ).scalars().first()
 
                 payload = {
                     "type": "trend_alert",
@@ -112,7 +138,11 @@ def run_alerts_evaluator() -> dict:
                     "sent_at": now.isoformat(),
                 }
 
-                ok, err = _send_webhook(rule.webhook_url, payload)
+                wh = (rule.webhook_url or "").strip()
+                if wh:
+                    ok, err = _send_webhook(wh, payload)
+                else:
+                    ok, err = True, None
                 ev = AlertEvent(
                     rule_id=rule.id,
                     topic_id=topic_id,

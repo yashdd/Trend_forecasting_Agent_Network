@@ -5,7 +5,8 @@ import { fetchSignals, triggerPipeline } from "../api/client";
 import { formatDistanceToNow } from "date-fns";
 import { Badge, Button, Card, CardBody, CardHeader, SegmentedTabs, Spinner, cx } from "../components/ui";
 import ExplainPanel from "../components/ExplainPanel";
-import { humanizeToken } from "../utils/format";
+import CommentsPanel from "../components/CommentsPanel";
+import { displayInsightText, humanizeToken, humanizeTopicLabel, isUnhelpfulInsightText } from "../utils/format";
 
 const CATEGORY_OPTIONS = [
   { value: "all", label: "All" },
@@ -22,32 +23,55 @@ const CATEGORY_OPTIONS = [
 ] as const;
 type CategoryValue = (typeof CATEGORY_OPTIONS)[number]["value"];
 
+const STRENGTH_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "some", label: "Some" },
+  { value: "strong", label: "Strong" },
+  { value: "hottest", label: "Hottest" },
+] as const;
+type StrengthValue = (typeof STRENGTH_OPTIONS)[number]["value"];
+
+function strengthBounds(v: StrengthValue): { min: number; max: number | null } {
+  if (v === "some") return { min: 0.25, max: 0.5 };
+  if (v === "strong") return { min: 0.5, max: 0.75 };
+  if (v === "hottest") return { min: 0.75, max: null };
+  return { min: 0, max: null };
+}
+
 export default function SignalsFeed() {
-  const [minScore, setMinScore] = React.useState(0);
+  const [strength, setStrength] = React.useState<StrengthValue>("all");
   const [category, setCategory] = React.useState<CategoryValue>("all");
-  const [pipelineRunning, setPipelineRunning] = React.useState(false);
+  const [updating, setUpdating] = React.useState(false);
   const [openExplainFor, setOpenExplainFor] = React.useState<number | null>(null);
+  const [openCommentsFor, setOpenCommentsFor] = React.useState<number | null>(null);
   const queryClient = useQueryClient();
+  const bounds = React.useMemo(() => strengthBounds(strength), [strength]);
   const { data: signals, isLoading, error } = useQuery({
-    queryKey: ["signals", minScore, category],
+    queryKey: ["signals", strength, category],
     queryFn: () =>
       fetchSignals({
-        limit: 30,
-        min_score: minScore,
+        limit: 60,
+        min_score: bounds.min,
         category: category === "all" ? undefined : category,
+      }).then((rows) => {
+        const cap = bounds.max;
+        if (cap == null) return rows;
+        return rows.filter((r) => (r.signal_score ?? 0) < cap);
       }),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
   });
 
-  const runPipeline = async () => {
-    setPipelineRunning(true);
+  const updateSignals = async () => {
+    setUpdating(true);
     try {
       await triggerPipeline();
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["signals"] });
-        setPipelineRunning(false);
+        setUpdating(false);
       }, 2000);
     } catch (e) {
-      setPipelineRunning(false);
+      setUpdating(false);
       console.error(e);
     }
   };
@@ -62,8 +86,8 @@ export default function SignalsFeed() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={runPipeline} disabled={pipelineRunning} variant="secondary">
-            {pipelineRunning ? "Pipeline started…" : "Run pipeline now"}
+          <Button onClick={updateSignals} disabled={updating} variant="secondary">
+            {updating ? "Updating…" : "Update signals"}
           </Button>
           <Button
             onClick={() => queryClient.invalidateQueries({ queryKey: ["signals"] })}
@@ -84,17 +108,12 @@ export default function SignalsFeed() {
             className="max-w-full overflow-x-auto"
           />
           <div className="flex items-center gap-3">
-            <label className="text-white/70 text-sm">Min score</label>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={minScore}
-              onChange={(e) => setMinScore(parseFloat(e.target.value))}
-              className="w-40 accent-emerald-500"
+            <label className="text-white/70 text-sm">Strength</label>
+            <SegmentedTabs
+              value={strength}
+              onChange={setStrength}
+              options={STRENGTH_OPTIONS as unknown as Array<{ value: StrengthValue; label: string }>}
             />
-            <Badge tone="emerald">{minScore.toFixed(2)}+</Badge>
           </div>
         </CardHeader>
         <CardBody className="flex items-center justify-between gap-4 text-sm">
@@ -119,11 +138,11 @@ export default function SignalsFeed() {
           <div className="max-w-xl mx-auto">
             <p className="text-white font-medium">No signals yet</p>
             <p className="text-white/70 text-sm mt-2">
-              Run the pipeline to ingest from 10 platforms, cluster discussions, and generate trend insights.
+              Click “Update signals” to scan sources and find what’s getting popular.
             </p>
             <div className="mt-5 flex items-center justify-center gap-2">
-              <Button type="button" onClick={runPipeline} disabled={pipelineRunning}>
-                {pipelineRunning ? "Pipeline started…" : "Run pipeline now"}
+              <Button type="button" onClick={updateSignals} disabled={updating}>
+                {updating ? "Updating…" : "Update signals"}
               </Button>
               <Button
                 type="button"
@@ -133,7 +152,7 @@ export default function SignalsFeed() {
                 Refresh
               </Button>
             </div>
-            <p className="text-white/55 text-xs mt-3">It runs in the background; refresh in a few minutes.</p>
+            <p className="text-white/55 text-xs mt-3">This can take 1–3 minutes. Refresh after a bit.</p>
           </div>
         </Card>
       )}
@@ -146,26 +165,38 @@ export default function SignalsFeed() {
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-display font-semibold text-white">
-                      {humanizeToken(s.topic_label) || `Topic ${s.topic_id}`}
+                      {humanizeTopicLabel(s.topic_label) || `Topic ${s.topic_id}`}
                     </span>
                     {s.category ? <Badge tone="slate">{humanizeToken(s.category)}</Badge> : null}
                     {s.signal_score != null ? (
-                      <Badge tone="emerald" className="cursor-help" title="Trend score: 0 to 1. Bigger means hotter right now.">
+                      <Badge
+                        tone="emerald"
+                        className="cursor-help"
+                        title="Trend score: 0 to 1. Bigger means hotter right now."
+                      >
                         Hot {s.signal_score.toFixed(2)}
                       </Badge>
                     ) : null}
                     {s.cross_source_strength != null ? (
-                      <Badge tone="sky" className="cursor-help" title="Seen in many places: higher means more different platforms talk about it.">
+                      <Badge
+                        tone="sky"
+                        className="cursor-help"
+                        title="Seen in many places: higher means more different platforms talk about it."
+                      >
                         Many places {s.cross_source_strength.toFixed(2)}
                       </Badge>
                     ) : null}
                     {s.predicted_impact ? <Badge tone="amber">{s.predicted_impact}</Badge> : null}
                   </div>
 
-                  {s.summary ? (
-                    <p className="text-white/80 text-sm leading-relaxed line-clamp-3">{s.summary}</p>
+                  {s.summary && !isUnhelpfulInsightText(s.summary) ? (
+                    <p className="text-white/80 text-sm leading-relaxed line-clamp-3">
+                      {displayInsightText(s.summary)}
+                    </p>
                   ) : (
-                    <p className="text-white/55 text-sm">No summary yet (LLM synthesis runs after clustering).</p>
+                    <p className="text-white/55 text-sm">
+                      No short summary yet — open the topic or use Update signals for a fresh scan.
+                    </p>
                   )}
 
                   <div className="flex flex-wrap gap-2">
@@ -195,6 +226,13 @@ export default function SignalsFeed() {
                       >
                         Explain like I’m 5
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setOpenCommentsFor(openCommentsFor === s.id ? null : s.id)}
+                        className="text-white/70 hover:text-white font-medium"
+                      >
+                        Comments
+                      </button>
                       <Link to={`/topics/${s.topic_id}`} className="text-cyan-200 hover:text-cyan-100 font-medium">
                         View deep-dive →
                       </Link>
@@ -202,6 +240,7 @@ export default function SignalsFeed() {
                   </div>
 
                   {openExplainFor === s.topic_id ? <ExplainPanel topicId={s.topic_id} /> : null}
+                  {openCommentsFor === s.id ? <CommentsPanel signalId={s.id} /> : null}
                 </div>
               </CardBody>
             </Card>
