@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Premium dark editorial theme */
+:root {
+  --bg: #060915;
+  --bg2: #070a18;
+  --card: rgba(255, 255, 255, 0.06);
+  --card2: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.10);
+  --text: #eaf0ff;
+  --muted: rgba(234, 240, 255, 0.70);
+  --muted2: rgba(234, 240, 255, 0.55);
+  --accentA: #22d3ee; /* cyan */
+  --accentB: #a78bfa; /* violet */
+  --accentC: #34d399; /* green */
+}
+
+body {
+  @apply font-sans antialiased;
+  font-size: 15px;
+  color: var(--text);
+  background:
+    radial-gradient(900px 600px at 18% 10%, rgba(34, 211, 238, 0.18), transparent 55%),
+    radial-gradient(900px 650px at 84% 8%, rgba(167, 139, 250, 0.16), transparent 56%),
+    radial-gradient(900px 700px at 60% 90%, rgba(52, 211, 153, 0.10), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+  background-attachment: fixed;
+}
+
+/* Improve default focus visibility */
+:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.7);
+  outline-offset: 2px;
+}
+
+/* Smoother charts + text rendering */
+html {
+  text-rendering: optimizeLegibility;
+}

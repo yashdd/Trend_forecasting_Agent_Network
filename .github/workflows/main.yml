@@ -14,6 +14,12 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # Minimal config so `import app.main` works in CI (no DB connection occurs on import).
+      DATABASE_URL: postgresql+asyncpg://ci:ci@localhost:5432/ci
+      DATABASE_URL_SYNC: postgresql://ci:ci@localhost:5432/ci
+      GOOGLE_API_KEY: ci
+      GEMINI_MODEL: gemini-1.5-flash
 
     steps:
       - name: Checkout
